@@ -146,6 +146,11 @@ class DirectoryMonitor:
           images.add(image)
     
     return images
+  
+  # Remove an image from the index
+  def removeImage(self, image):
+    if image.fromRootDir in self.files:
+      del self.files[image.fromRootDir]
 
   # Add an image to a category, and add the category to the list if it doesn't exist
   def addImageCategory(self, image, category):
@@ -515,6 +520,7 @@ class Img(QMainWindow):
     for item in selected:
       image = item.data(QtCore.Qt.UserRole)
       self.addToCategory(image, category)
+    self.refreshUI()
   
   # Remove the selected images from the given category
   def contextRemoveImageCategory(self, category):
@@ -522,6 +528,15 @@ class Img(QMainWindow):
     for item in selected:
       image = item.data(QtCore.Qt.UserRole)
       self.removeFromCategory(image, category)
+    self.refreshUI()
+
+  # Remove an image from the index
+  def contextRemoveImage(self):
+    selected = self.imageList.selectedItems()
+    for item in selected:
+      image = item.data(QtCore.Qt.UserRole)
+      self.fileWatcher.removeImage(image)
+    self.refreshUI()
 
   # Create the 'background' menu for the category list
   def createImageMenu(self, pos, item):
@@ -539,7 +554,6 @@ class Img(QMainWindow):
     menu.addAction(addCategoryAction)
     
     # List other categories
-    actions = []
     for category in self.fileWatcher.getCategories():
       if category != 'All' and category != 'Uncategorised':
         # worst part of python. closures are bound by reference so if we don't trap it
@@ -548,7 +562,11 @@ class Img(QMainWindow):
         newAction = QAction(category)
         newAction.triggered.connect(gen(self, category))
         menu.addAction(newAction)
-        actions.append(newAction)
+    
+    removeAction = QAction('Remove from index')
+    removeAction.triggered.connect(self.contextRemoveImage)
+    menu.addAction(removeAction)
+    
     menu.show()
     menu.exec_(pos)
     return menu
