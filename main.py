@@ -151,6 +151,8 @@ class DirectoryMonitor:
   def addImageCategory(self, image, category):
     if category == 'All' or category == 'Uncategorised':
       return
+
+    print(f'adding image {image.name} to category {category}')
   
     if image.fromRootDir in self.files:  
       if category not in self.categoryList:
@@ -508,6 +510,7 @@ class Img(QMainWindow):
   
   # Add the selected images to the given category
   def contextAddImageCategory(self, category):
+    print(f'context adding image to category {category}')
     selected = self.imageList.selectedItems()
     for item in selected:
       image = item.data(QtCore.Qt.UserRole)
@@ -536,11 +539,16 @@ class Img(QMainWindow):
     menu.addAction(addCategoryAction)
     
     # List other categories
+    actions = []
     for category in self.fileWatcher.getCategories():
       if category != 'All' and category != 'Uncategorised':
-        action = QAction(category)
-        action.triggered.connect(lambda _: self.contextAddImageCategory(category))
-        menu.addAction(action)
+        # worst part of python. closures are bound by reference so if we don't trap it
+        # inside another function first every time 'category' has the last iteration's value
+        def gen(img, cat): return lambda _: img.contextAddImageCategory(cat)
+        newAction = QAction(category)
+        newAction.triggered.connect(gen(self, category))
+        menu.addAction(newAction)
+        actions.append(newAction)
     menu.show()
     menu.exec_(pos)
     return menu
