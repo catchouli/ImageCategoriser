@@ -298,7 +298,7 @@ class Img(QMainWindow):
       # mark task as done
       self.iconQueue.task_done()
       # sleep so we don't block the main thread
-      time.sleep(0.01)
+      time.sleep(0.001)
   
   # Add an image to the ui
   def addImage(self, image):
@@ -538,6 +538,31 @@ class Img(QMainWindow):
       self.fileWatcher.removeImage(image)
     self.refreshUI()
 
+  # Actually delete an image
+  def contextDeleteImage(self):
+    selected = self.imageList.selectedItems()
+    toRemove = []
+    for item in selected:
+      image = item.data(QtCore.Qt.UserRole)
+      toRemove.append(image)
+    
+    msg = QMessageBox()
+    msg.setIcon(QMessageBox.Warning)
+    msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+    msg.setText(f'This will <b>delete</b> {len(toRemove)} images <b>from disk</b>.')
+    msg.setWindowTitle('Warning')
+
+    if msg.exec_() == QMessageBox.Ok:
+      print('actually deleting images')
+      for image in toRemove:
+        print(f'actually deleting image {image.name}')
+        try:
+          os.remove(str(image.absolutePath))
+        except Exception:
+          pass
+        self.fileWatcher.removeImage(image)
+      self.refreshUI()
+
   # Create the 'background' menu for the category list
   def createImageMenu(self, pos, item):
     menu = QMenu()
@@ -554,6 +579,8 @@ class Img(QMainWindow):
     menu.addAction(addCategoryAction)
     
     # List other categories
+    # We have to store the actions for some reason or they don't show up (raii?)
+    actions = []
     for category in self.fileWatcher.getCategories():
       if category != 'All' and category != 'Uncategorised':
         # worst part of python. closures are bound by reference so if we don't trap it
@@ -562,10 +589,15 @@ class Img(QMainWindow):
         newAction = QAction(category)
         newAction.triggered.connect(gen(self, category))
         menu.addAction(newAction)
+        actions.append(newAction)
     
     removeAction = QAction('Remove from index')
     removeAction.triggered.connect(self.contextRemoveImage)
     menu.addAction(removeAction)
+    
+    deleteAction = QAction('Delete from disk')
+    deleteAction.triggered.connect(self.contextDeleteImage)
+    menu.addAction(deleteAction)
     
     menu.show()
     menu.exec_(pos)
