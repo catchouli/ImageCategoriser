@@ -136,6 +136,7 @@ class Img(QMainWindow):
   def __init__(self):
     super().__init__()
     self.ready = False
+    self.imageIcons = {}
     self.fileWatcher = DirectoryMonitor(testDirectory)
     self.currentCategory = None
     self.categories = {}
@@ -193,7 +194,12 @@ class Img(QMainWindow):
   # Add an image to the ui
   def addImage(self, image):
     if image.name not in self.images:
-      icon = QIcon(str(image.absolutePath))
+      icon = None
+      if image.absolutePath in self.imageIcons:
+        icon = self.imageIcons[image.absolutePath]
+      else:
+        icon = QIcon(str(image.absolutePath))
+        self.imageIcons[image.absolutePath] = icon
       item = QListWidgetItem(icon, image.name)
       item.setSizeHint(QtCore.QSize(128, 128))
       item.setData(QtCore.Qt.UserRole, QVariant(image))
