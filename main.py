@@ -506,12 +506,10 @@ class Img(QMainWindow):
         return
         
     self.fileWatcher.addImageCategory(image, category)
-    self.refreshUI()
   
   # Remove an image from a category and refresh the ui
   def removeFromCategory(self, image, category):
     self.fileWatcher.removeImageCategory(image, category)
-    self.refreshUI()
   
   # Add the selected images to the given category
   def contextAddImageCategory(self, category):
