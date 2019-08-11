@@ -9,14 +9,14 @@ import PIL
 
 from PyQt5 import QtCore
 from PyQt5.QtCore import QVariant
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import ( QFont, QIcon )
 from PyQt5.QtWidgets import ( QApplication, QMainWindow, QWidget, QListView
                             , QToolTip, QPushButton, QMessageBox, QDesktopWidget
                             , QAction, QHBoxLayout, QGridLayout, QListWidget
                             , QListWidgetItem, QMenu )
 
 # The test directory
-testDirectory = 'C:\\Users\\nano\\Pictures\\art'
+testDirectory = 'C:\\work\\sourcetrees\\img\\test'
 
 # An image
 class Image:
@@ -140,12 +140,14 @@ class Img(QMainWindow):
     self.imageList = QListWidget()
     self.imageList.installEventFilter(self)
     self.imageList.itemDoubleClicked.connect(self.imageDoubleClick)
+    self.imageList.setViewMode(QListWidget.IconMode)
+    self.imageList.setIconSize(QtCore.QSize(96, 96))
     layout.addWidget(self.imageList)
     
     # Window position and size
     self.resize(800, 600)
     self.center()
-    self.setWindowTitle('tooltips')
+    self.setWindowTitle('Img')
     self.show()
     
     # Refresh
@@ -157,7 +159,8 @@ class Img(QMainWindow):
   # Add an image to the ui
   def addImage(self, image):
     if image.name not in self.images:
-      item = QListWidgetItem(image.name)
+      icon = QIcon(str(image.absolutePath))
+      item = QListWidgetItem(icon, image.name)
       item.setData(QtCore.Qt.UserRole, QVariant(image))
       self.images[image.name] = item
       self.imageList.insertItem(self.imageList.count(), item)
@@ -256,8 +259,7 @@ class Img(QMainWindow):
     imageViewerFromCommandLine = {'linux':'xdg-open',
                                   'win32':'explorer',
                                   'darwin':'open'}[sys.platform]
-    path = str(image.absolutePath)
-    subprocess.run([imageViewerFromCommandLine, path])
+    subprocess.run([imageViewerFromCommandLine, str(image.absolutePath)])
 
   # Create the 'background' menu for the category list
   def createCategoryListMenu(self, pos):
