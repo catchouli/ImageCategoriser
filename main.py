@@ -18,7 +18,7 @@ from PyQt5.QtGui import ( QFont, QIcon )
 from PyQt5.QtWidgets import ( QApplication, QMainWindow, QWidget, QListView
                             , QToolTip, QPushButton, QMessageBox, QDesktopWidget
                             , QAction, QHBoxLayout, QGridLayout, QListWidget
-                            , QListWidgetItem, QMenu )
+                            , QListWidgetItem, QMenu, QInputDialog )
 
 # The test directory
 testDirectory = 'C:\\work\\sourcetrees\\img\\test'
@@ -81,22 +81,31 @@ class DirectoryMonitor:
     return images
 
   # Add an image to a category, and add the category to the list if it doesn't exist
-  def addImageCategory(self, file, category):
-    if file in self.files:  
+  def addImageCategory(self, image, category):
+    if category == 'All' or category == 'Uncategorised':
+      return
+  
+    if image.fromRootDir in self.files:  
       if category not in self.categoryList:
         self.categoryList.add(category)
         
-      if category not in self.files[file].categories:
-        self.files[file].categories.append(category)
+      if category not in self.files[image.fromRootDir].categories:
+        self.files[image.fromRootDir].categories.append(category)
 
   # Remove an image from a category
-  def removeImageCategory(self, file, category):
-    if file in files:
-      if category in files[file]:
-        files[file].remove(category)
+  def removeImageCategory(self, image, category):
+    if category == 'All' or category == 'Uncategorised':
+      return
+      
+    if image.fromRootDir in self.files:
+      if category in self.files[image.fromRootDir].categories:
+        self.files[image.fromRootDir].categories.remove(category)
 
   # Remove a category and make sure all images no longer list it
   def removeCategory(self, category):
+    if category == 'All' or category == 'Uncategorised':
+      return
+      
     if category in self.categoryList:
       for image in self.files:
         image.categories.remove(category)
@@ -166,6 +175,7 @@ class Img(QMainWindow):
     if image.name not in self.images:
       icon = QIcon(str(image.absolutePath))
       item = QListWidgetItem(icon, image.name)
+      item.setSizeHint(QtCore.QSize(128, 128))
       item.setData(QtCore.Qt.UserRole, QVariant(image))
       self.images[image.name] = item
       self.imageList.insertItem(self.imageList.count(), item)
@@ -282,13 +292,65 @@ class Img(QMainWindow):
     menu.show()
     menu.exec_(pos)
     return menu
+  
+  # Show warning box
+  def warningBox(self, message):
+    msg = QMessageBox()
+    msg.setIcon(QMessageBox.Warning)
+    msg.setText(message)
+    msg.setWindowTitle('Warning')
+    msg.exec_()
+  
+  # Prompt the user for a category name
+  def promptCategoryName(self):
+    item, ok = QInputDialog.getText(self, 'Category name', 'Enter category name')
+    if ok:
+      return item
+    else:
+      return ''
+  
+  # Add an image to a category and refresh the ui
+  def addToCategory(self, image, category):
+    if category == '':
+      category = self.promptCategoryName()
+      if category == '':
+        self.warningBox('No category name provided')
+        return
+        
+    self.fileWatcher.addImageCategory(image, category)
+    self.refreshUI()
+  
+  # Remove an image from a category and refresh the ui
+  def removeFromCategory(self, image, category):
+    self.fileWatcher.removeImageCategory(image, category)
+    self.refreshUI()
 
   # Create the 'background' menu for the category list
   def createImageMenu(self, pos, item):
+    image = item.data(QtCore.Qt.UserRole)
+  
     menu = QMenu()
-    menu.addAction('Add to category...')
+  
+    # Remove from current category
+    if self.currentCategory != 'All' and self.currentCategory != 'Uncategorised':
+      removeCategoryAction = QAction(f'Remove from {self.currentCategory}')
+      removeCategoryAction.triggered.connect(lambda a: self.removeFromCategory(image, self.currentCategory))
+      menu.addAction(removeCategoryAction)
+    
+    # Main add action
+    addCategoryAction = QAction('Add to category...')
+    addCategoryAction.triggered.connect(lambda a: self.addToCategory(image, ''))
+    menu.addAction(addCategoryAction)
+    
+    # List other categories
     for category in self.fileWatcher.getCategories():
-      menu.addAction(category)
+      if category != 'All' and category != 'Uncategorised':
+        action = QAction(category)
+        action.triggered.connect(lambda _: self.addToCategory(image, category))
+        menu.addAction(action)
+        
+        if category in image.categories:
+          action.setDisabled(True)
     menu.show()
     menu.exec_(pos)
     return menu
