@@ -45,7 +45,6 @@ class DirectoryMonitor:
     self.categoryList = [ "Uncategorised", "All" ]
     self.files = {}
     self.saveTimer = None
-    self.saveTimerLock = threading.Lock() # dunno if this is needed but better safe than sorry
     self.load()
     
   def load(self):
@@ -86,26 +85,20 @@ class DirectoryMonitor:
     self.clearSaveTimer()
 
     # start new timer
-    self.saveTimerLock.acquire(True)
     self.saveTimer = threading.Timer(5, self.saveTimerCallback)
     self.saveTimer.start()
-    self.saveTimerLock.release()
     print('save timer set')
   
   def clearSaveTimer(self):
-    self.saveTimerLock.acquire(True)
     if self.saveTimer != None:
       self.saveTimer.cancel()
       self.saveTimer = None
       print('save timer cleared')
-    self.saveTimerLock.release()
 
   def saveTimerCallback(self):
     print('save timer elapsed, saving')
-    self.saveTimerLock.acquire(True)
     self.saveTimer = None
     self.save()
-    self.saveTimerLock.release()
 
   def configFile(self, suffix=''):
     return self.rootDir / f"config{suffix}.json"
