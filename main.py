@@ -107,9 +107,29 @@ class DirectoryMonitor:
       return
       
     if category in self.categoryList:
-      for image in self.files:
-        image.categories.remove(category)
+      for pathFromBase, image in self.files.items():
+        if category in image.categories:
+          image.categories.remove(category)
       self.categoryList.remove(category)
+
+  # Rename a category and make sure all images no longer list it
+  def renameCategory(self, category, newName):
+    if category == 'All' or category == 'Uncategorised':
+      return
+    if newName == 'All' or newName == 'Uncategorised':
+      return
+    
+    if newName in self.categoryList:
+      return
+      
+    if category in self.categoryList:
+      for pathFromBase, image in self.files.items():
+        if category in image.categories:
+          image.categories.remove(category)
+          image.categories.append(newName)
+      
+      self.categoryList.remove(category)
+      self.categoryList.add(newName)
 
 # The main window
 class Img(QMainWindow):
@@ -223,8 +243,24 @@ class Img(QMainWindow):
 
   # Refresh the ui categories and files based on fileWatcher and the current category
   def refreshUI(self):
+    # Category list
+    categories = self.fileWatcher.getCategories()
+  
     # Update categories
-    for category in self.fileWatcher.getCategories():
+    remove = []
+    
+    # Remove categories that have been deleted
+    # todo: for some reason this doesn't actually remove them, maybe because they're selected
+    for category in self.categories:
+      if category not in categories:
+        print(f'adding {category} to list')
+        remove.append(category)
+    for category in remove:
+      print(f'removing {category}')
+      self.removeCategory(category)
+    
+    # Add categories if not added already
+    for category in categories:
       self.addCategory(category)
   
     # Clear the existing images from the view
@@ -253,8 +289,6 @@ class Img(QMainWindow):
       item = source.itemAt(event.pos())
       if item != None:
         self.createCategoryMenu(event.globalPos(), item)
-      else:
-        self.createCategoryListMenu(event.globalPos())
       return True
     # Handle context events for the image list
     elif event.type() == QtCore.QEvent.ContextMenu and source is self.imageList:
@@ -279,18 +313,46 @@ class Img(QMainWindow):
   # Create the 'background' menu for the category list
   def createCategoryListMenu(self, pos):
     menu = QMenu()
-    menu.addAction('Add category...')
+    
+    addCategoryAction = QAction(f'Add category...')
+    addCategoryAction.triggered.connect(lambda _: self.contextAddCategory())
+    menu.addAction(addCategoryAction)
+      
     menu.show()
     menu.exec_(pos)
     return menu
+  
+  def contextDeleteCategory(self, category):
+    self.fileWatcher.removeCategory(category)
+    self.refreshUI()
+  
+  def contextRenameCategory(self, category):
+    newName = self.promptCategoryName()
+    if newName != None:
+      self.fileWatcher.renameCategory(category, newName)
+      self.refreshUI()
 
   # Create the 'background' menu for the category list
   def createCategoryMenu(self, pos, item):
+    category = item.text()
+    
     menu = QMenu()
-    menu.addAction('Delete category')
-    menu.addAction('Rename category...')
+    
+    deleteCategoryAction = QAction(f'Delete {category}')
+    deleteCategoryAction.triggered.connect(lambda _: self.contextDeleteCategory(category))
+    menu.addAction(deleteCategoryAction)
+    
+    renameCategoryAction = QAction(f'Rename {category}')
+    renameCategoryAction.triggered.connect(lambda _: self.contextRenameCategory(category))
+    menu.addAction(renameCategoryAction)
+    
+    if category == 'All' or category == 'Uncategorised':
+      deleteCategoryAction.setDisabled(True)
+      renameCategoryAction.setDisabled(True)
+    
     menu.show()
     menu.exec_(pos)
+      
     return menu
   
   # Show warning box
@@ -305,16 +367,19 @@ class Img(QMainWindow):
   def promptCategoryName(self):
     item, ok = QInputDialog.getText(self, 'Category name', 'Enter category name')
     if ok:
-      return item
+      if item != '':
+        return item
+      else:
+        self.warningBox('No category name provided')
+        return None
     else:
-      return ''
+      return None
   
   # Add an image to a category and refresh the ui
   def addToCategory(self, image, category):
     if category == '':
       category = self.promptCategoryName()
-      if category == '':
-        self.warningBox('No category name provided')
+      if category == None:
         return
         
     self.fileWatcher.addImageCategory(image, category)
@@ -334,12 +399,12 @@ class Img(QMainWindow):
     # Remove from current category
     if self.currentCategory != 'All' and self.currentCategory != 'Uncategorised':
       removeCategoryAction = QAction(f'Remove from {self.currentCategory}')
-      removeCategoryAction.triggered.connect(lambda a: self.removeFromCategory(image, self.currentCategory))
+      removeCategoryAction.triggered.connect(lambda _: self.removeFromCategory(image, self.currentCategory))
       menu.addAction(removeCategoryAction)
     
     # Main add action
     addCategoryAction = QAction('Add to category...')
-    addCategoryAction.triggered.connect(lambda a: self.addToCategory(image, ''))
+    addCategoryAction.triggered.connect(lambda _: self.addToCategory(image, ''))
     menu.addAction(addCategoryAction)
     
     # List other categories
