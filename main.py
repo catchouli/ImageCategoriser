@@ -1,6 +1,11 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+# TODO:
+#  - implement all the context menu options
+#  - save out the state of the DirectoryMonitor class to a file (what images there are and what categories they're in)
+#  - QIcons are too slow for previewing all the images directly, we need to do something clever to speed it up
+
 import sys
 import subprocess
 import os
