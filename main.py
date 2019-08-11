@@ -14,6 +14,7 @@ import PIL
 import threading
 import time
 import queue
+import json
 
 from PyQt5 import QtCore
 from PyQt5.QtCore import QVariant
@@ -25,6 +26,7 @@ from PyQt5.QtWidgets import ( QApplication, QMainWindow, QWidget, QListView
 
 # The test directory
 testDirectory = 'C:\\Users\\nano\\Pictures\\art'
+IconSize = 256
 
 # An image
 class Image:
@@ -39,22 +41,91 @@ class Image:
 class DirectoryMonitor:
   # Initialise the monitor
   def __init__(self, dir):
-    self.rootDir = dir
-    self.categoryList = set([ "Uncategorised", "All" ])
+    self.rootDir = Path(dir)
+    self.categoryList = [ "Uncategorised", "All" ]
     self.files = {}
+    self.saveTimer = None
+    self.saveTimerLock = threading.Lock() # dunno if this is needed but better safe than sorry
+    self.load()
+    
+  def load(self):
+    configPath = self.configFile().resolve()
+    if os.path.isfile(str(configPath)):
+      with open(str(configPath), 'r') as f:
+        cfg = json.load(f)
+        for path, categories in cfg['images'].items():
+          fromRootDir = Path(path)
+          name = fromRootDir.parts[-1]
+          image = Image(name, fromRootDir, self.rootDir)
+          image.categories = categories
+          self.files[fromRootDir] = image
+          for category in image.categories:
+            if category not in self.categoryList:
+              self.categoryList.append(category)
+    else:
+      print(f'no config file found at {str(configPath)}, starting from scratch')
+
+  def save(self):
+    self.clearSaveTimer()
+    configPath = self.configFile().resolve()
+    
+    # save backup as -2 first
+    if os.path.isfile(str(configPath)):
+      backupPath = self.configFile('-2').resolve()
+      print(f'saving old config file as {str(backupPath)}')
+      os.replace(str(configPath), str(backupPath))
+    
+    print(f'saving config file to {str(configPath)}')
+    cfg = { 'images': {} }
+    for _, image in self.files.items():
+      cfg['images'][str(image.fromRootDir)] = image.categories
+    with open(str(configPath), 'w') as f:
+      json.dump(cfg, f)
+  
+  def setSaveTimer(self):
+    self.clearSaveTimer()
+
+    # start new timer
+    self.saveTimerLock.acquire(True)
+    self.saveTimer = threading.Timer(5, self.saveTimerCallback)
+    self.saveTimer.start()
+    self.saveTimerLock.release()
+    print('save timer set')
+  
+  def clearSaveTimer(self):
+    self.saveTimerLock.acquire(True)
+    if self.saveTimer != None:
+      self.saveTimer.cancel()
+      self.saveTimer = None
+      print('save timer cleared')
+    self.saveTimerLock.release()
+
+  def saveTimerCallback(self):
+    print('save timer elapsed, saving')
+    self.saveTimerLock.acquire(True)
+    self.saveTimer = None
+    self.save()
+    self.saveTimerLock.release()
+
+  def configFile(self, suffix=''):
+    return self.rootDir / f"config{suffix}.json"
   
   # Refresh the folder
   def refresh(self):
-    for subdir, dirs, files in os.walk(self.rootDir):
+    for subdir, dirs, files in os.walk(str(self.rootDir.resolve())):
         for file in files:
           # construct path
           path = Path(subdir) / Path(file)
           
           # trim rootDir
-          fromRootDir = path.relative_to(Path(self.rootDir))
+          fromRootDir = path.relative_to(self.rootDir)
           
           # get name
           name = path.parts[-1]
+          
+          # skip config files
+          if path.suffix == '.json':
+            continue
           
           # create image object
           image = Image(name, fromRootDir, self.rootDir)
@@ -90,10 +161,12 @@ class DirectoryMonitor:
   
     if image.fromRootDir in self.files:  
       if category not in self.categoryList:
-        self.categoryList.add(category)
+        self.categoryList.append(category)
         
       if category not in self.files[image.fromRootDir].categories:
         self.files[image.fromRootDir].categories.append(category)
+
+    self.setSaveTimer()
 
   # Remove an image from a category
   def removeImageCategory(self, image, category):
@@ -132,7 +205,7 @@ class DirectoryMonitor:
           image.categories.append(newName)
       
       self.categoryList.remove(category)
-      self.categoryList.add(newName)
+      self.categoryList.append(newName)
 
 # The main window
 class Img(QMainWindow):
@@ -144,6 +217,7 @@ class Img(QMainWindow):
     self.currentCategory = None
     self.categories = {}
     self.images = {}
+    self.imagesLock = threading.Lock()
     
     # icon thread
     self.iconThread = None
@@ -184,8 +258,9 @@ class Img(QMainWindow):
     self.imageList.installEventFilter(self)
     self.imageList.itemDoubleClicked.connect(self.imageDoubleClick)
     self.imageList.setViewMode(QListWidget.IconMode)
-    self.imageList.setIconSize(QtCore.QSize(96, 96))
+    self.imageList.setIconSize(QtCore.QSize(IconSize, IconSize))
     self.imageList.setSelectionMode(QAbstractItemView.ExtendedSelection)
+    self.imageList.setResizeMode(QListView.Adjust)
     layout.addWidget(self.imageList)
     
     # Window position and size
@@ -206,6 +281,9 @@ class Img(QMainWindow):
     # Indicate ready so we can handle events
     self.ready = True
   
+  def exiting(self):
+    self.fileWatcher.save()
+  
   # Wait for icon tasks and load the icon
   def iconTask(self):
     while True:
@@ -213,7 +291,10 @@ class Img(QMainWindow):
       # load file
       icon.addFile(str(image.absolutePath))
       # force refresh
-      self.images[image.name].setIcon(icon)
+      self.imagesLock.acquire(True)
+      if image.fromRootDir in self.images:
+        self.images[image.fromRootDir].setIcon(icon)
+      self.imagesLock.release()
       # mark task as done
       self.iconQueue.task_done()
       # sleep so we don't block the main thread
@@ -221,7 +302,7 @@ class Img(QMainWindow):
   
   # Add an image to the ui
   def addImage(self, image):
-    if image.name not in self.images:
+    if image.fromRootDir not in self.images:
       icon = None
       if image.absolutePath in self.imageIcons:
         icon = self.imageIcons[image.absolutePath]
@@ -230,21 +311,28 @@ class Img(QMainWindow):
         self.iconQueue.put((image, icon))
         self.imageIcons[image.absolutePath] = icon
       item = QListWidgetItem(icon, image.name)
-      item.setSizeHint(QtCore.QSize(128, 128))
+      item.setSizeHint(QtCore.QSize(IconSize, IconSize+32))
       item.setData(QtCore.Qt.UserRole, QVariant(image))
-      self.images[image.name] = item
+      
+      self.imagesLock.acquire(True)
+      self.images[image.fromRootDir] = item
       self.imageList.insertItem(self.imageList.count(), item)
+      self.imagesLock.release()
 
   # Remove an image from the ui
   def removeImage(self, image):
-    if image.name in self.images:
-      item = self.images.pop(image.name)
+    if image.fromRootDir in self.images:
+      self.imagesLock.acquire(True)
+      item = self.images.pop(image.fromRootDir)
       self.imageList.removeItemWidget(item)
+      self.imagesLock.release()
 
   # Remove all images from the ui
   def clearImages(self):
+    self.imagesLock.acquire(True)
     self.images = {}
     self.imageList.clear()
+    self.imagesLock.release()
   
   # Add a category to the ui
   def addCategory(self, name):
@@ -424,33 +512,42 @@ class Img(QMainWindow):
   def removeFromCategory(self, image, category):
     self.fileWatcher.removeImageCategory(image, category)
     self.refreshUI()
+  
+  # Add the selected images to the given category
+  def contextAddImageCategory(self, category):
+    selected = self.imageList.selectedItems()
+    for item in selected:
+      image = item.data(QtCore.Qt.UserRole)
+      self.addToCategory(image, category)
+  
+  # Remove the selected images from the given category
+  def contextRemoveImageCategory(self, category):
+    selected = self.imageList.selectedItems()
+    for item in selected:
+      image = item.data(QtCore.Qt.UserRole)
+      self.removeFromCategory(image, category)
 
   # Create the 'background' menu for the category list
   def createImageMenu(self, pos, item):
-    image = item.data(QtCore.Qt.UserRole)
-  
     menu = QMenu()
   
     # Remove from current category
     if self.currentCategory != 'All' and self.currentCategory != 'Uncategorised':
       removeCategoryAction = QAction(f'Remove from {self.currentCategory}')
-      removeCategoryAction.triggered.connect(lambda _: self.removeFromCategory(image, self.currentCategory))
+      removeCategoryAction.triggered.connect(lambda _: self.contextRemoveImageCategory(self.currentCategory))
       menu.addAction(removeCategoryAction)
     
     # Main add action
     addCategoryAction = QAction('Add to category...')
-    addCategoryAction.triggered.connect(lambda _: self.addToCategory(image, ''))
+    addCategoryAction.triggered.connect(lambda _: self.contextAddImageCategory(''))
     menu.addAction(addCategoryAction)
     
     # List other categories
     for category in self.fileWatcher.getCategories():
       if category != 'All' and category != 'Uncategorised':
         action = QAction(category)
-        action.triggered.connect(lambda _: self.addToCategory(image, category))
+        action.triggered.connect(lambda _: self.contextAddImageCategory(category))
         menu.addAction(action)
-        
-        if category in image.categories:
-          action.setDisabled(True)
     menu.show()
     menu.exec_(pos)
     return menu
@@ -459,4 +556,6 @@ class Img(QMainWindow):
 if __name__ == '__main__':
   app = QApplication(sys.argv)
   img = Img()  
-  sys.exit(app.exec_())
+  res = app.exec_()
+  img.exiting()
+  sys.exit(res)
