@@ -11,17 +11,20 @@ import subprocess
 import os
 from pathlib import Path
 import PIL
+import threading
+import time
+import queue
 
 from PyQt5 import QtCore
 from PyQt5.QtCore import QVariant
-from PyQt5.QtGui import ( QFont, QIcon )
+from PyQt5.QtGui import ( QFont, QIcon, QPixmap )
 from PyQt5.QtWidgets import ( QApplication, QMainWindow, QWidget, QListView
                             , QToolTip, QPushButton, QMessageBox, QDesktopWidget
                             , QAction, QHBoxLayout, QGridLayout, QListWidget
-                            , QListWidgetItem, QMenu, QInputDialog )
+                            , QListWidgetItem, QMenu, QInputDialog, QAbstractItemView )
 
 # The test directory
-testDirectory = 'C:\\work\\sourcetrees\\img\\test'
+testDirectory = 'C:\\Users\\nano\\Pictures\\art'
 
 # An image
 class Image:
@@ -141,6 +144,11 @@ class Img(QMainWindow):
     self.currentCategory = None
     self.categories = {}
     self.images = {}
+    
+    # icon thread
+    self.iconThread = None
+    self.iconQueue = queue.Queue()
+    
     self.initUI()
 
   def initUI(self):
@@ -177,6 +185,7 @@ class Img(QMainWindow):
     self.imageList.itemDoubleClicked.connect(self.imageDoubleClick)
     self.imageList.setViewMode(QListWidget.IconMode)
     self.imageList.setIconSize(QtCore.QSize(96, 96))
+    self.imageList.setSelectionMode(QAbstractItemView.ExtendedSelection)
     layout.addWidget(self.imageList)
     
     # Window position and size
@@ -189,7 +198,26 @@ class Img(QMainWindow):
     self.refreshFiles()
     self.refreshUI()
     
+    # Start icon load thread
+    self.iconThread = threading.Thread(name='iconThread', target=self.iconTask)
+    self.iconThread.daemon = True
+    self.iconThread.start()
+    
+    # Indicate ready so we can handle events
     self.ready = True
+  
+  # Wait for icon tasks and load the icon
+  def iconTask(self):
+    while True:
+      (image, icon) = self.iconQueue.get()
+      # load file
+      icon.addFile(str(image.absolutePath))
+      # force refresh
+      self.images[image.name].setIcon(icon)
+      # mark task as done
+      self.iconQueue.task_done()
+      # sleep so we don't block the main thread
+      time.sleep(0.01)
   
   # Add an image to the ui
   def addImage(self, image):
@@ -198,7 +226,8 @@ class Img(QMainWindow):
       if image.absolutePath in self.imageIcons:
         icon = self.imageIcons[image.absolutePath]
       else:
-        icon = QIcon(str(image.absolutePath))
+        icon = QIcon()
+        self.iconQueue.put((image, icon))
         self.imageIcons[image.absolutePath] = icon
       item = QListWidgetItem(icon, image.name)
       item.setSizeHint(QtCore.QSize(128, 128))
