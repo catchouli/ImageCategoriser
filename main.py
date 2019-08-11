@@ -61,6 +61,7 @@ class DirectoryMonitor:
           for category in image.categories:
             if category not in self.categoryList:
               self.categoryList.append(category)
+              self.sortCategoryList()
     else:
       print(f'no config file found at {str(configPath)}, starting from scratch')
 
@@ -162,6 +163,7 @@ class DirectoryMonitor:
     if image.fromRootDir in self.files:  
       if category not in self.categoryList:
         self.categoryList.append(category)
+        self.sortCategoryList()
         
       if category not in self.files[image.fromRootDir].categories:
         self.files[image.fromRootDir].categories.append(category)
@@ -187,6 +189,7 @@ class DirectoryMonitor:
         if category in image.categories:
           image.categories.remove(category)
       self.categoryList.remove(category)
+      self.sortCategoryList()
 
   # Rename a category and make sure all images no longer list it
   def renameCategory(self, category, newName):
@@ -206,6 +209,16 @@ class DirectoryMonitor:
       
       self.categoryList.remove(category)
       self.categoryList.append(newName)
+      self.sortCategoryList()
+  
+  # Sort the category list
+  def sortCategoryList(self):
+    # Make sure it goes [Uncategorised, All, ...]
+    self.categoryList.remove('Uncategorised')
+    self.categoryList.remove('All')
+    self.categoryList.sort()
+    self.categoryList.insert(0, 'All')
+    self.categoryList.insert(0, 'Uncategorised')
 
 # The main window
 class Img(QMainWindow):
