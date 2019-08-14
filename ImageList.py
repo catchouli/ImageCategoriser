@@ -119,7 +119,7 @@ class ImageList(QListWidget):
     menu = QMenu()
   
     # Remove from current category
-    currentCategory = self._mainWindow._categoryList.currentCategory
+    currentCategory = self._mainWindow._categoryList._currentCategory
     if currentCategory != 'All' and currentCategory != 'Uncategorised':
       removeCategoryAction = QAction(f'Remove from {currentCategory}')
       removeCategoryAction.triggered.connect(lambda _: self._contextRemoveImageCategory(currentCategory))

@@ -53,8 +53,10 @@ class MainWindow(QMainWindow):
     wid.setLayout(layout)
     
     # Categories
-    self._categoryList = CategoryList(self, self._fileWatcher)
-    self._categoryList.categoryChanged.connect(self._showCategory)
+    self._categoryList = CategoryList()
+    self._categoryList.onCategoryChanged.connect(self._showCategory)
+    self._categoryList.onRenameCategory.connect(self._renameCategory)
+    self._categoryList.onRemoveCategory.connect(self._removeCategory)
     layout.addWidget(self._categoryList)
     
     # Images
@@ -106,4 +108,14 @@ class MainWindow(QMainWindow):
 
   # Refresh the ui when the category changes
   def _showCategory(self, cat):
+    self.refreshUI()
+  
+  # Rename a category
+  def _renameCategory(self, old, new):
+    self._fileWatcher.renameCategory(old, new)
+    self.refreshUI()
+  
+  # Delete a category
+  def _removeCategory(self, category):
+    self._fileWatcher.removeCategory(category)
     self.refreshUI()

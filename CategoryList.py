@@ -19,13 +19,18 @@ import Utils
 
 # A category list
 class CategoryList(QListWidget):
-  categoryChanged = pyqtSignal(str)
+  # Signal triggered when the user changes categories
+  onCategoryChanged = pyqtSignal(str)
+  
+  # Signal triggered when the user attempts to rename a category
+  onRenameCategory = pyqtSignal(str, str)
+  
+  # Signal triggered when the user attempts to delete a category
+  onRemoveCategory = pyqtSignal(str)
 
-  def __init__(self, mainWindow, fileWatcher):
+  # Set up category list
+  def __init__(self):
     super().__init__()
-    
-    self._mainWindow = mainWindow
-    self._fileWatcher = fileWatcher
     
     self._currentCategory = None
     self._categories = {}
@@ -65,7 +70,7 @@ class CategoryList(QListWidget):
   # Called when a different category is selected in the list
   def _categoryChanged(self, curr, prev):
     self._currentCategory = curr.text()
-    self.categoryChanged.emit(self._currentCategory)
+    self.onCategoryChanged.emit(self._currentCategory)
 
   # Create the 'background' menu for the category list
   def _createCategoryMenu(self, pos, item):
@@ -90,12 +95,12 @@ class CategoryList(QListWidget):
       
     return menu
   
+  # Trigger category to be deleted
   def _contextDeleteCategory(self, category):
-    self._fileWatcher.removeCategory(category)
-    self._mainWindow.refreshUI()
+    self.onRemoveCategory.emit(category)
   
+  # Trigger category to be renamed
   def _contextRenameCategory(self, category):
     newName = Utils.promptCategoryName(self)
     if newName != None:
-      self._fileWatcher.renameCategory(category, newName)
-      self._mainWindow.refreshUI()
+      self.onRenameCategory.emit(category, newName)
