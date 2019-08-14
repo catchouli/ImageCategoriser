@@ -8,7 +8,7 @@ import time
 import queue
 
 from PyQt5 import QtCore
-from PyQt5.QtCore import QVariant
+from PyQt5.QtCore import ( pyqtSignal, QVariant )
 from PyQt5.QtGui import ( QFont, QIcon, QPixmap )
 from PyQt5.QtWidgets import ( QApplication, QMainWindow, QWidget, QListView
                             , QToolTip, QPushButton, QMessageBox, QDesktopWidget
@@ -16,22 +16,30 @@ from PyQt5.QtWidgets import ( QApplication, QMainWindow, QWidget, QListView
                             , QListWidgetItem, QMenu, QInputDialog, QAbstractItemView )
 
 import Utils
-from DirectoryMonitor import DirectoryMonitor
-
-# The test directory
-testDirectory = 'C:\\Users\\nano\\Pictures\\art'
-IconSize = 256
+from DirectoryMonitor import ( DirectoryMonitor, Image )
 
 # The image list
 class ImageList(QListWidget):
-  def __init__(self, mainWindow, fileWatcher):
+  # Signal triggered when the user adds an image to a category (image, category)
+  onAddImageCategory = pyqtSignal(Image, str)
+  
+  # Signal triggered when the user removes an image from a category (image, category)
+  onRemoveImageCategory = pyqtSignal(Image, str)
+  
+  # Signal triggerde when the user attemps to remove an image from the index completely
+  onRemoveImageIndex = pyqtSignal(Image)
+  
+  def __init__(self, getCategories, getCurrentCategory):
     super().__init__()
     
-    self._mainWindow = mainWindow
-    self._fileWatcher = fileWatcher
+    self._getCategories = getCategories
+    self._getCurrentCategory = getCurrentCategory
     
     # all images in the list currently
     self._images = {}
+    
+    # configuration
+    self._iconSize = 256
     
     # icon thread
     self._imagesLock = threading.Lock()
@@ -45,7 +53,7 @@ class ImageList(QListWidget):
     self.installEventFilter(self)
     self.itemDoubleClicked.connect(self._imageDoubleClick)
     self.setViewMode(QListWidget.IconMode)
-    self.setIconSize(QtCore.QSize(IconSize, IconSize))
+    self.setIconSize(QtCore.QSize(self._iconSize, self._iconSize))
     self.setSelectionMode(QAbstractItemView.ExtendedSelection)
     self.setResizeMode(QListView.Adjust)
     
@@ -65,7 +73,7 @@ class ImageList(QListWidget):
         self._iconQueue.put((image, icon))
         self._imageIcons[image.absolutePath] = icon
       item = QListWidgetItem(icon, image.name)
-      item.setSizeHint(QtCore.QSize(IconSize, IconSize+32))
+      item.setSizeHint(QtCore.QSize(self._iconSize, self._iconSize+32))
       item.setData(QtCore.Qt.UserRole, QVariant(image))
       
       self._imagesLock.acquire(True)
@@ -119,7 +127,7 @@ class ImageList(QListWidget):
     menu = QMenu()
   
     # Remove from current category
-    currentCategory = self._mainWindow._categoryList._currentCategory
+    currentCategory = self._getCurrentCategory()
     if currentCategory != 'All' and currentCategory != 'Uncategorised':
       removeCategoryAction = QAction(f'Remove from {currentCategory}')
       removeCategoryAction.triggered.connect(lambda _: self._contextRemoveImageCategory(currentCategory))
@@ -133,7 +141,7 @@ class ImageList(QListWidget):
     # List other categories
     # We have to store the actions for some reason or they don't show up (raii?)
     actions = []
-    for category in self._fileWatcher.getCategories():
+    for category in self._getCategories():
       if category != 'All' and category != 'Uncategorised':
         # worst part of python. closures are bound by reference so if we don't trap it
         # inside another function first every time 'category' has the last iteration's value
@@ -162,28 +170,25 @@ class ImageList(QListWidget):
     for item in selected:
       image = item.data(QtCore.Qt.UserRole)
       if category == '':
-        category = Utils.promptCategoryName(self._mainWindow)
+        category = Utils.promptCategoryName(self)
         if category == None:
           return
-          
-      self._fileWatcher.addImageCategory(image, category)
-      self._mainWindow.refreshUI()
+      
+      self.onAddImageCategory.emit(image, category)
   
   # Remove the selected images from the given category
   def _contextRemoveImageCategory(self, category):
     selected = self.selectedItems()
     for item in selected:
       image = item.data(QtCore.Qt.UserRole)
-      self._fileWatcher.removeImageCategory(image, category)
-    self._mainWindow.refreshUI()
+      self.onRemoveImageCategory.emit(image, category)
 
   # Remove an image from the index
   def _contextRemoveImage(self):
     selected = self.selectedItems()
     for item in selected:
       image = item.data(QtCore.Qt.UserRole)
-      self._fileWatcher.removeImage(image)
-    self._mainWindow.refreshUI()
+      self.onRemoveImageIndex.emit(image)
 
   # Actually delete an image
   def _contextDeleteImage(self):
@@ -209,8 +214,7 @@ class ImageList(QListWidget):
           type, value, traceback = sys.exc_info()
           print(f'got exception deleting image {image.name}: {value}')
           pass
-        self._fileWatcher.removeImage(image)
-      self._mainWindow.refreshUI()
+        self.onRemoveImageIndex.emit(image)
 
   # Open an image in the system default image viewer
   def _openImage(self, image):

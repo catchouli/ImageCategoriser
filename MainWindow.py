@@ -60,7 +60,12 @@ class MainWindow(QMainWindow):
     layout.addWidget(self._categoryList)
     
     # Images
-    self._imageList = ImageList(self, self._fileWatcher)
+    getCategories = lambda: self._fileWatcher.getCategories()
+    getCurrentCategory = lambda: self._categoryList._currentCategory
+    self._imageList = ImageList(getCategories, getCurrentCategory)
+    self._imageList.onAddImageCategory.connect(self._addImageCategory)
+    self._imageList.onRemoveImageCategory.connect(self._removeImageCategory)
+    self._imageList.onRemoveImageIndex.connect(self._removeImageIndex)
     layout.addWidget(self._imageList)
     
     # Window position and size
@@ -90,7 +95,6 @@ class MainWindow(QMainWindow):
     self._imageList.clearImages()
     
     # Get the current category's images and add them to the ui
-    print(f'changing category to {self._categoryList._currentCategory}')
     for image in self._fileWatcher.getCategory(self._categoryList._currentCategory):
       self._imageList.addImage(image)
 
@@ -118,4 +122,19 @@ class MainWindow(QMainWindow):
   # Delete a category
   def _removeCategory(self, category):
     self._fileWatcher.removeCategory(category)
+    self.refreshUI()
+  
+  # Add an image to a category
+  def _addImageCategory(self, image, category):
+    self._fileWatcher.addImageCategory(image, category)
+    self.refreshUI()
+  
+  # Remove an image from a category
+  def _removeImageCategory(self, image, category):
+    self._fileWatcher.removeImageCategory(image, category)
+    self.refreshUI()
+  
+  # Remove an image from the index
+  def _removeImageIndex(self, image):
+    self._fileWatcher.removeImage(image)
     self.refreshUI()
