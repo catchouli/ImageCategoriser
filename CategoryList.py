@@ -1,19 +1,8 @@
 # -*- coding: utf-8 -*-
 
-import os
-import sys
-import subprocess
-import threading
-import time
-import queue
-
 from PyQt5 import QtCore
-from PyQt5.QtCore import ( QVariant, pyqtSignal )
-from PyQt5.QtGui import ( QFont, QIcon, QPixmap )
-from PyQt5.QtWidgets import ( QApplication, QMainWindow, QWidget, QListView
-                            , QToolTip, QPushButton, QMessageBox, QDesktopWidget
-                            , QAction, QHBoxLayout, QGridLayout, QListWidget
-                            , QListWidgetItem, QMenu, QInputDialog, QAbstractItemView )
+from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtWidgets import ( QListWidget, QAction, QListWidgetItem, QMenu )
 
 import Utils
 

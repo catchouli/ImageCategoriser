@@ -1,22 +1,9 @@
 # -*- coding: utf-8 -*-
 
-import os
-import sys
-import subprocess
-import threading
-import time
-import queue
-
-from PyQt5 import QtCore
-from PyQt5.QtCore import QVariant
-from PyQt5.QtGui import ( QFont, QIcon, QPixmap )
-from PyQt5.QtWidgets import ( QApplication, QMainWindow, QWidget, QListView
-                            , QToolTip, QPushButton, QMessageBox, QDesktopWidget
-                            , QAction, QHBoxLayout, QGridLayout, QListWidget
-                            , QListWidgetItem, QMenu, QInputDialog, QAbstractItemView )
+from PyQt5.QtWidgets import ( QMessageBox, QInputDialog )
 
 # Show warning box
-def warningBox( message):
+def warningBox(message):
   msg = QMessageBox()
   msg.setIcon(QMessageBox.Warning)
   msg.setText(message)

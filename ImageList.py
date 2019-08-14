@@ -2,21 +2,19 @@
 
 import os
 import sys
-import subprocess
-import threading
 import time
 import queue
+import threading
+import subprocess
 
 from PyQt5 import QtCore
+from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import ( pyqtSignal, QVariant )
-from PyQt5.QtGui import ( QFont, QIcon, QPixmap )
-from PyQt5.QtWidgets import ( QApplication, QMainWindow, QWidget, QListView
-                            , QToolTip, QPushButton, QMessageBox, QDesktopWidget
-                            , QAction, QHBoxLayout, QGridLayout, QListWidget
-                            , QListWidgetItem, QMenu, QInputDialog, QAbstractItemView )
+from PyQt5.QtWidgets import ( QListView, QMessageBox, QAction, QListWidget
+                            , QListWidgetItem, QMenu, QAbstractItemView )
 
 import Utils
-from DirectoryMonitor import ( DirectoryMonitor, Image )
+from DirectoryMonitor import Image
 
 # The image list
 class ImageList(QListWidget):
@@ -125,6 +123,11 @@ class ImageList(QListWidget):
   # Create the 'background' menu for the category list
   def _createImageMenu(self, pos, item):
     menu = QMenu()
+    
+    # Main add action
+    addCategoryAction = QAction('Add to category...')
+    addCategoryAction.triggered.connect(lambda _: self._contextAddImageCategory(''))
+    menu.addAction(addCategoryAction)
   
     # Remove from current category
     currentCategory = self._getCurrentCategory()
@@ -133,12 +136,11 @@ class ImageList(QListWidget):
       removeCategoryAction.triggered.connect(lambda _: self._contextRemoveImageCategory(currentCategory))
       menu.addAction(removeCategoryAction)
     
-    # Main add action
-    addCategoryAction = QAction('Add to category...')
-    addCategoryAction.triggered.connect(lambda _: self._contextAddImageCategory(''))
-    menu.addAction(addCategoryAction)
-    
     # List other categories
+    addListAction = QAction('Add to...')
+    addListAction.setDisabled(True)
+    menu.addAction(addListAction)
+    
     # We have to store the actions for some reason or they don't show up (raii?)
     actions = []
     for category in self._getCategories():
@@ -146,7 +148,7 @@ class ImageList(QListWidget):
         # worst part of python. closures are bound by reference so if we don't trap it
         # inside another function first every time 'category' has the last iteration's value
         def gen(img, cat): return lambda _: img._contextAddImageCategory(cat)
-        newAction = QAction(category)
+        newAction = QAction(f'  {category}')
         newAction.triggered.connect(gen(self, category))
         menu.addAction(newAction)
         actions.append(newAction)
