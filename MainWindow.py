@@ -7,6 +7,8 @@ from ImageList import ImageList
 from CategoryList import CategoryList
 from DirectoryMonitor import DirectoryMonitor
 
+# Todo: instead of having refreshUI just have the directory monitor tell us when there's new files and stuff
+
 # The main window
 class MainWindow(QMainWindow):
   def __init__(self, testDirectory):
